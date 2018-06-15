@@ -48,9 +48,9 @@
                         </Style>
                     </ToggleButton.Style>
                 </ToggleButton>
-                <Button Content="保存文件"  Grid.Row="2" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="Button_Click_1" Grid.ColumnSpan="2"
-                        Grid.Column="0" />
-                <Button Content="扫描设备"  Grid.Row="0" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="Button_Click" Grid.ColumnSpan="2"
+                <Button x:Name="SaveButton" Content="保存文件"  Grid.Row="2" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="Button_Click_1" Grid.ColumnSpan="2"
+                        Grid.Column="0" IsEnabled="False" />
+                <Button x:Name="ScanButton" Content="扫描设备"  Grid.Row="0" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="Button_Click" Grid.ColumnSpan="2"
                         Grid.Column="0" />
 
                 <ComboBox x:Name="Filter"  Grid.Row="3" Grid.Column="0" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" Margin="10,10,10,10" ItemsSource="{Binding Source={StaticResource Item}}" FontWeight="Bold" SelectedIndex="0" Grid.ColumnSpan="2"/>

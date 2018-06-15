@@ -42,8 +42,8 @@ namespace UsbTest
         private readonly UsbDeviceFinder _myUsbFinder;
         private UsbRegDeviceList _regList;
         private UsbEndpointReader _reader;
-        private byte[] _recvBuf = new byte[17280];
-        private float[] _iniImage = new float[4320];
+        private byte[] _recvBuf = new byte[8640];
+        private float[] _iniImage = new float[2160];
         private Mat _imGray = new Mat(54, 80, MatType.CV_32F);
         private Mat _imGray2 = new Mat(54, 160, MatType.CV_32F);
         private string _filename;
@@ -70,14 +70,6 @@ namespace UsbTest
                 for (int j = 0; j < _imGray.Width; j++)
                 {
                     _imGray.Set<float>(i, j, 0);
-                }
-            }
-
-            for (int i = 0; i < _imGray.Height / 2; i++)
-            {
-                for (int j = 0; j < _imGray.Width; j++)
-                {
-                    _imGray2.Set<float>(i, j, 0);
                 }
             }
 
@@ -191,28 +183,28 @@ namespace UsbTest
             }
             else
             {
-                for (int i = 0; i < 17280; i = i + 4)
+                for (int i = 0; i < 8640; i = i + 4)
                 {
                     _iniImage[i / 4] = BitConverter.ToSingle(_recvBuf, i);
                 }
 
-                for (int i = _imGray2.Height / 2; i < _imGray2.Height; i++)
+                for (int i = _imGray.Height / 2; i < _imGray.Height; i++)
                 {
-                    for (int j = 0; j < _imGray2.Width; j++)
+                    for (int j = 0; j < _imGray.Width; j++)
                     {
                         float temp = _iniImage[(i - 27) + j * 27] * 255 / 10000;
 
-                        _imGray2.Set<float>(i, j, temp);
+                        _imGray.Set<float>(i, j, temp);
                     }
                 }
 
-                Cv2.Resize(_imGray2, imGrayResult2, new OpenCvSharp.Size(1200, 600));
+                Cv2.Resize(_imGray, imGrayResult2, new OpenCvSharp.Size(600, 300));
             }
 
             Cv2.ConvertScaleAbs(imGrayResult2, imGrayResult1);
 
             Point2f point2F = new Point2f(imGrayResult1.Width / 2, imGrayResult1.Height);
-            Cv2.LinearPolar(imGrayResult1, recover, point2F, 600, InterpolationFlags.WarpInverseMap);
+            Cv2.LinearPolar(imGrayResult1, recover, point2F, 300, InterpolationFlags.WarpInverseMap);
             Cv2.ApplyColorMap(recover, dst, ColormapTypes.Jet);
 
             Cv2.ImShow("Demo", dst);
@@ -229,27 +221,39 @@ namespace UsbTest
                 }
                 else
                 {
-                    LbxDev.Items.Clear();
-                    foreach (UsbRegistry regDevice in _regList)
+                    if (_regList.Count != 0)
                     {
-                        LbxDev.Items.Add(regDevice.FullName);
+                        LbxDev.Items.Clear();
+                        foreach (UsbRegistry regDevice in _regList)
+                        {
+                            LbxDev.Items.Add(regDevice.FullName);
+                        }
+
+                        _myUsbDevice = UsbDevice.OpenUsbDevice(_myUsbFinder);
+
+                        if (_myUsbDevice is IUsbDevice wholeUsbDevice)
+                        {
+                            wholeUsbDevice.SetConfiguration(1);
+                            wholeUsbDevice.ClaimInterface(0);
+                        }
+
+                        _reader = _myUsbDevice.OpenEndpointReader(ReadEndpointID.Ep01);
+                        _reader.DataReceived += OnRxEndPointData;
+
+                        _reader.ReadBufferSize = 8640;
+
+                        _reader.Reset();
+                        _reader.DataReceivedEnabled = true;
+
+                        ScanButton.IsEnabled = false;
+                        SaveButton.IsEnabled = true;
+                        Filter.IsEnabled = false;
                     }
-
-                    _myUsbDevice = UsbDevice.OpenUsbDevice(_myUsbFinder);
-
-                    if (_myUsbDevice is IUsbDevice wholeUsbDevice)
+                    else
                     {
-                        wholeUsbDevice.SetConfiguration(1);
-                        wholeUsbDevice.ClaimInterface(0);
+                        AddMsg($" > 找不到设备");
+                        Connectbutton.IsChecked = false;
                     }
-
-                    _reader = _myUsbDevice.OpenEndpointReader(ReadEndpointID.Ep01);
-                    _reader.DataReceived += OnRxEndPointData;
-
-                    _reader.ReadBufferSize = Filter.SelectedIndex == 0 ? 8640 : 17280;
-
-                    _reader.Reset();
-                    _reader.DataReceivedEnabled = true;
                 }
             }
             else
@@ -259,7 +263,8 @@ namespace UsbTest
                 _reader.DataReceived -= OnRxEndPointData;
 
                 LbxDev.Items.RemoveAt(0);
-                AddMsg($" > Close Device");
+                AddMsg($" > 关闭设备");
+                AddMsg($" > 再次开启设备需要重新上电");
 
                 if (_myUsbDevice.IsOpen)
                 {
@@ -275,6 +280,10 @@ namespace UsbTest
                 }
                 _myUsbDevice = null;
                 UsbDevice.Exit();
+
+                ScanButton.IsEnabled = true;
+                SaveButton.IsEnabled = false;
+                Filter.IsEnabled = true;
             }
         }
 
