@@ -1,26 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Forms;
-using System.IO;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
-using System.Windows.Threading;
-using LibUsbDotNet;
+﻿using LibUsbDotNet;
 using LibUsbDotNet.Main;
-using LibUsbDotNet.Info;
 using OpenCvSharp;
+using System;
+using System.IO;
+using System.Windows;
+using System.Windows.Forms;
+using System.Windows.Threading;
 
 namespace UsbTest
 {
@@ -53,22 +38,24 @@ namespace UsbTest
 
     public partial class MainWindow : System.Windows.Window
     {
-        private UsbDevice MyUsbDevice;
-        private UsbDeviceFinder MyUsbFinder = new UsbDeviceFinder(1155, 22315);
-        private UsbRegDeviceList regList;
-        private UsbEndpointReader reader;
-        private byte[] recvBuf = new byte[8640];
-        private float[] iniImage = new float[2160];
-        private Mat dst = new Mat();
-        private Mat recover = new Mat();
-        private Mat im_gray_result1 = new Mat();
-        private Mat im_gray_result2 = new Mat();
-        private Mat im_gray = new Mat(54, 80, MatType.CV_32F);
-        private string filename;
+        private UsbDevice _myUsbDevice;
+        private readonly UsbDeviceFinder _myUsbFinder;
+        private UsbRegDeviceList _regList;
+        private UsbEndpointReader _reader;
+        private byte[] _recvBuf = new byte[17280];
+        private float[] _iniImage = new float[4320];
+        private Mat _imGray = new Mat(54, 80, MatType.CV_32F);
+        private Mat _imGray2 = new Mat(54, 160, MatType.CV_32F);
+        private string _filename;
         private FileStream _filestream;
         private BinaryWriter _sw;
-        private FilePath filePath = new FilePath();
-        private DataState dataState = DataState.Stoped;
+        private readonly FilePath _filePath;
+        private DataState _dataState = DataState.Stoped;
+
+        private Mat dst = new Mat();
+        private Mat recover = new Mat();
+        private Mat imGrayResult1 = new Mat();
+        private Mat imGrayResult2 = new Mat();
 
         private delegate void ShowMsg();
         private delegate void UpdateBytesDelegate(byte[] data);
@@ -77,77 +64,62 @@ namespace UsbTest
         {
             Cv2.NamedWindow("Demo", WindowMode.AutoSize);
             UsbFind();
-            for (int i = 0; i < im_gray.Height / 2; i++)
+
+            for (int i = 0; i < _imGray.Height / 2; i++)
             {
-                for (int j = 0; j < im_gray.Width; j++)
+                for (int j = 0; j < _imGray.Width; j++)
                 {
-                    im_gray.Set<float>(i, j, 0);
+                    _imGray.Set<float>(i, j, 0);
                 }
             }
+
+            for (int i = 0; i < _imGray.Height / 2; i++)
+            {
+                for (int j = 0; j < _imGray.Width; j++)
+                {
+                    _imGray2.Set<float>(i, j, 0);
+                }
+            }
+
         }
 
         private void Window_Closing(object sender, EventArgs e)
         {
-            if (MyUsbDevice != null)
+            if (_myUsbDevice == null) return;
+            if (_myUsbDevice.IsOpen)
             {
-                if (MyUsbDevice.IsOpen)
+                try
                 {
-                    try
+                    if (_myUsbDevice is IUsbDevice wholeUsbDevice)
                     {
-                        IUsbDevice wholeUsbDevice = MyUsbDevice as IUsbDevice;
-                        if (!(wholeUsbDevice is null))
-                        {
-                            wholeUsbDevice.ReleaseInterface(0);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.Write(ex.ToString());
+                        wholeUsbDevice.ReleaseInterface(0);
                     }
                 }
-                MyUsbDevice = null;
-                UsbDevice.Exit();
+                catch (Exception ex)
+                {
+                    Console.Write(ex.ToString());
+                }
             }
+            _myUsbDevice = null;
+            UsbDevice.Exit();
         }
 
         public MainWindow()
         {
             InitializeComponent();
+
+            _myUsbFinder = new UsbDeviceFinder(1155, 22315);
+            _filePath = new FilePath();
         }
 
         private void OnRxEndPointData(object sender, EndpointDataEventArgs e)
         {
             AddMsg($" > {e.Count} data received");
-            Array.Copy(e.Buffer, recvBuf, e.Buffer.Length);
+            Array.Copy(e.Buffer, _recvBuf, e.Buffer.Length);
 
-            for (int i = 0; i < 8640; i = i + 4)
-            {
-                iniImage[i / 4] = BitConverter.ToSingle(recvBuf, i);
-            }
+            Dispatcher.Invoke(new ShowMsg(CreatImg));
 
-            for (int i = im_gray.Height / 2; i < im_gray.Height; i++)
-            {
-                for (int j = 0; j < im_gray.Width; j++)
-                {
-                    float temp = iniImage[(i - 27) + j * 27] * 255 / 50000;
-                    //float temp = iniImage[i - 27 + (j + 8) * 27] * iniImage[i - 27 + (j + 8) * 27] * iniImage[i - 27 + (j + 8) * 27];
-                    im_gray.Set<float>(i, j, temp);
-                }
-            }
-
-            Cv2.Resize(im_gray, im_gray_result2, new OpenCvSharp.Size(600, 300));
-            //Cv2.Normalize(im_gray_result2, im_gray_result2, 0, 255, NormTypes.MinMax);
-            Cv2.ConvertScaleAbs(im_gray_result2, im_gray_result1);
-            //Cv2.ConvertScaleAbs(im_gray, im_gray_result1);
-
-            Point2f point2F = new Point2f(im_gray_result1.Width / 2, im_gray_result1.Height);
-            Cv2.LinearPolar(im_gray_result1, recover, point2F, 300, InterpolationFlags.WarpInverseMap);
-            Cv2.ApplyColorMap(recover, dst, ColormapTypes.Jet);
-
-            Cv2.ImShow("Demo", dst);
-            //Cv2.ImShow("Demo", im_gray_result1);
-
-            if (dataState == DataState.Started)
+            if (_dataState == DataState.Started)
             {
                 Dispatcher.Invoke(new UpdateBytesDelegate(SaveData), e.Buffer);
             }
@@ -161,112 +133,155 @@ namespace UsbTest
 
         private void UsbFind()
         {
-            lbxDev.Items.Clear();
-            regList = UsbDevice.AllDevices.FindAll(MyUsbFinder);
-            if (regList.Count == 0)
+            LbxDev.Items.Clear();
+            _regList = UsbDevice.AllDevices.FindAll(_myUsbFinder);
+            if (_regList.Count == 0)
             {
-                System.Windows.MessageBox.Show("Device Not Found");
+                System.Windows.MessageBox.Show("找不到设备");
             }
 
-            foreach(UsbRegistry regDevice in regList)
+            foreach(UsbRegistry regDevice in _regList)
             {
-                lbxDev.Items.Add(regDevice.FullName);
+                LbxDev.Items.Add(regDevice.FullName);
             }
 
         }
 
         private void SaveData(byte[] bytes)
         {
-
-            if (filePath.Path != "")
-            {
-                _sw.Write(bytes);
-                _sw.Flush();
-            }
+            if (_filePath.Path == "") return;
+            _sw.Write(bytes);
+            _sw.Flush();
 
         }
 
         private void AddMsg(string msg)
         {
             Dispatcher.BeginInvoke(DispatcherPriority.Normal, (ShowMsg)delegate () {
-                if (lbxMsg.Items.Count > 50)
+                if (LbxMsg.Items.Count > 50)
                 {
-                    lbxMsg.Items.RemoveAt(0);
+                    LbxMsg.Items.RemoveAt(0);
                 }
-                lbxMsg.Items.Add(msg);
+                LbxMsg.Items.Add(msg);
             });
+        }
+
+        private void CreatImg()
+        {
+
+            if (Filter.SelectedIndex == 0)
+            {
+
+                for (int i = 0; i < 8640; i = i + 4)
+                {
+                    _iniImage[i / 4] = BitConverter.ToSingle(_recvBuf, i);
+                }
+
+                for (int i = _imGray.Height / 2; i < _imGray.Height; i++)
+                {
+                    for (int j = 0; j < _imGray.Width; j++)
+                    {
+                        float temp = _iniImage[(i - 27) + j * 27] * 255 / 50000;
+                        //float temp = iniImage[i - 27 + (j + 8) * 27] * iniImage[i - 27 + (j + 8) * 27] * iniImage[i - 27 + (j + 8) * 27];
+                        _imGray.Set<float>(i, j, temp);
+                    }
+                }
+
+                Cv2.Resize(_imGray, imGrayResult2, new OpenCvSharp.Size(600, 300));
+            }
+            else
+            {
+                for (int i = 0; i < 17280; i = i + 4)
+                {
+                    _iniImage[i / 4] = BitConverter.ToSingle(_recvBuf, i);
+                }
+
+                for (int i = _imGray2.Height / 2; i < _imGray2.Height; i++)
+                {
+                    for (int j = 0; j < _imGray2.Width; j++)
+                    {
+                        float temp = _iniImage[(i - 27) + j * 27] * 255 / 10000;
+
+                        _imGray2.Set<float>(i, j, temp);
+                    }
+                }
+
+                Cv2.Resize(_imGray2, imGrayResult2, new OpenCvSharp.Size(1200, 600));
+            }
+
+            Cv2.ConvertScaleAbs(imGrayResult2, imGrayResult1);
+
+            Point2f point2F = new Point2f(imGrayResult1.Width / 2, imGrayResult1.Height);
+            Cv2.LinearPolar(imGrayResult1, recover, point2F, 600, InterpolationFlags.WarpInverseMap);
+            Cv2.ApplyColorMap(recover, dst, ColormapTypes.Jet);
+
+            Cv2.ImShow("Demo", dst);
         }
 
         private void ConnectbuttonClick(object sender, RoutedEventArgs e)
         {
 
-            if ((bool)connectbutton.IsChecked)
+            if (Connectbutton.IsChecked != null && (bool)Connectbutton.IsChecked)
             {
-                if(MyUsbDevice != null)
+                if(_myUsbDevice != null)
                 {
 
                 }
                 else
                 {
-                    lbxDev.Items.Clear();
-                    foreach (UsbRegistry regDevice in regList)
+                    LbxDev.Items.Clear();
+                    foreach (UsbRegistry regDevice in _regList)
                     {
-                        lbxDev.Items.Add(regDevice.FullName);
+                        LbxDev.Items.Add(regDevice.FullName);
                     }
 
-                    MyUsbDevice = UsbDevice.OpenUsbDevice(MyUsbFinder);
-                    IUsbDevice wholeUsbDevice = MyUsbDevice as IUsbDevice;
+                    _myUsbDevice = UsbDevice.OpenUsbDevice(_myUsbFinder);
 
-                    if (!(wholeUsbDevice is null))
+                    if (_myUsbDevice is IUsbDevice wholeUsbDevice)
                     {
                         wholeUsbDevice.SetConfiguration(1);
                         wholeUsbDevice.ClaimInterface(0);
                     }
 
-                    reader = MyUsbDevice.OpenEndpointReader(ReadEndpointID.Ep01);
-                    reader.DataReceived += OnRxEndPointData;
-                    reader.ReadBufferSize = 8640;
-                    //reader.ReadBufferSize = 5120;
-                    reader.Reset();
-                    reader.DataReceivedEnabled = true;
+                    _reader = _myUsbDevice.OpenEndpointReader(ReadEndpointID.Ep01);
+                    _reader.DataReceived += OnRxEndPointData;
+
+                    _reader.ReadBufferSize = Filter.SelectedIndex == 0 ? 8640 : 17280;
+
+                    _reader.Reset();
+                    _reader.DataReceivedEnabled = true;
                 }
             }
             else
             {
-                if(MyUsbDevice != null)
+                if (_myUsbDevice == null) return;
+                _reader.DataReceivedEnabled = false;
+                _reader.DataReceived -= OnRxEndPointData;
+
+                LbxDev.Items.RemoveAt(0);
+                AddMsg($" > Close Device");
+
+                if (_myUsbDevice.IsOpen)
                 {
-
-                    reader.DataReceivedEnabled = false;
-                    reader.DataReceived -= OnRxEndPointData;
-
-                    lbxDev.Items.RemoveAt(0);
-                    AddMsg($" > Close Device");
-
-                    if (MyUsbDevice.IsOpen)
+                    try
                     {
-                        try
-                        {
-                            IUsbDevice wholeUsbDevice = MyUsbDevice as IUsbDevice;
-                            if(!(wholeUsbDevice is null))
-                            {
-                                wholeUsbDevice.ReleaseInterface(0);
-                            }
-                        }
-                        catch(Exception ex)
-                        {
-                            Console.Write(ex.ToString());
-                        }
+                        IUsbDevice wholeUsbDevice = _myUsbDevice as IUsbDevice;
+                        wholeUsbDevice?.ReleaseInterface(0);
                     }
-                    MyUsbDevice = null;
-                    UsbDevice.Exit();
+                    catch(Exception ex)
+                    {
+                        Console.Write(ex.ToString());
+                    }
                 }
+                _myUsbDevice = null;
+                UsbDevice.Exit();
             }
         }
 
         private void Button_Click_1(object sender, RoutedEventArgs e)
         {
             var btn = (System.Windows.Controls.Button)sender;
-            if(filePath.Path == "")
+            if(_filePath.Path == "")
             {
                 var mDialog = new FolderBrowserDialog();
                 DialogResult result = mDialog.ShowDialog();
@@ -276,22 +291,22 @@ namespace UsbTest
                     return;
                 }
 
-                filePath.Path = mDialog.SelectedPath.Trim();
+                _filePath.Path = mDialog.SelectedPath.Trim();
             }
 
-            if(dataState == DataState.Started)
+            if(_dataState == DataState.Started)
             {
-                dataState = DataState.Stoped;
+                _dataState = DataState.Stoped;
                 btn.Content = "开始保存";
                 _sw.Dispose();
                 _filestream.Dispose();
             }
             else
             {
-                filename = DateTime.Now.ToString("MM-dd") + "保存数据";
-                dataState = DataState.Started;
+                _filename = DateTime.Now.ToString("MM-dd") + "保存数据";
+                _dataState = DataState.Started;
                 btn.Content = "停止保存";
-                string path = filePath.Path + "\\" + filename;
+                string path = _filePath.Path + "\\" + _filename;
                 _filestream = new FileStream(@path, FileMode.Create, FileAccess.Write);
                 _sw = new BinaryWriter(_filestream);
             }

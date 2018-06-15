@@ -4,27 +4,37 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:UsbTest"
+        xmlns:system="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800" Loaded="Window_Loaded" Closing="Window_Closing" WindowStartupLocation="CenterScreen">
+        Title="手势识别演示Demo" Height="450" Width="600" Loaded="Window_Loaded" Closing="Window_Closing" WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <x:Array x:Key="Item" Type="{x:Type system:String}">
+            <system:String>动目标检测</system:String>
+            <system:String>静目标检测</system:String>
+        </x:Array>
+    </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="224*"/>
-            <RowDefinition Height="195*"/>
+            <RowDefinition Height="250*"/>
+            <RowDefinition Height="169*"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="188*"/>
-            <ColumnDefinition Width="377*"/>
-            <ColumnDefinition Width="227*"/>
+            <ColumnDefinition Width="187*"/>
+            <ColumnDefinition Width="405*"/>
         </Grid.ColumnDefinitions>
         <GroupBox Header="功能">
             <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="5*"/>
+                    <ColumnDefinition Width="3*"/>
+                </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <ToggleButton IsChecked="False" x:Name="connectbutton" Grid.Row="1"  FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,5,10,5" Click="ConnectbuttonClick">
+                <ToggleButton IsChecked="False" x:Name="Connectbutton" Grid.Row="1"  FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="ConnectbuttonClick" Grid.ColumnSpan="2">
                     <ToggleButton.Style>
                         <Style TargetType="ToggleButton">
                             <Style.Triggers>
@@ -38,20 +48,20 @@
                         </Style>
                     </ToggleButton.Style>
                 </ToggleButton>
-                <Button Content="保存文件"  Grid.Row="2" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,5,10,5" Click="Button_Click_1" />
-                <Button Content="扫描设备"  Grid.Row="0" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,5,10,5" Click="Button_Click" />
-                <Button Content="暂停接收"  Grid.Row="3" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,5,10,5" />
+                <Button Content="保存文件"  Grid.Row="2" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="Button_Click_1" Grid.ColumnSpan="2"
+                        Grid.Column="0" />
+                <Button Content="扫描设备"  Grid.Row="0" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="Button_Click" Grid.ColumnSpan="2"
+                        Grid.Column="0" />
+
+                <ComboBox x:Name="Filter"  Grid.Row="3" Grid.Column="0" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" Margin="10,10,10,10" ItemsSource="{Binding Source={StaticResource Item}}" FontWeight="Bold" SelectedIndex="0" Grid.ColumnSpan="2"/>
             </Grid>
         </GroupBox>
-        <GroupBox Grid.Column="1" Header="状态显示">
-            <ListBox x:Name="lbxMsg"/>
+        <GroupBox Grid.Row="0" Grid.Column="1" Header="状态显示">
+            <ListBox x:Name="LbxMsg"/>
         </GroupBox>
         <GroupBox Grid.Column="1" Header="设备列表" Grid.Row="1">
-            <ListBox x:Name="lbxDev"/>
+            <ListBox x:Name="LbxDev"/>
         </GroupBox>
-        <GroupBox Grid.Column="2" Header="图像显示" Grid.RowSpan="2">
-            <Image x:Name="image" Width="108" Height="320" >
-            </Image>
-        </GroupBox>
+
     </Grid>
 </Window>
