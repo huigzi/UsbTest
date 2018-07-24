@@ -42,10 +42,10 @@ namespace UsbTest
         private readonly UsbDeviceFinder _myUsbFinder;
         private UsbRegDeviceList _regList;
         private UsbEndpointReader _reader;
+        private UsbEndpointWriter _writer;
         private byte[] _recvBuf = new byte[8640];
         private float[] _iniImage = new float[2160];
         private Mat _imGray = new Mat(54, 80, MatType.CV_32F);
-        private Mat _imGray2 = new Mat(54, 160, MatType.CV_32F);
         private string _filename;
         private FileStream _filestream;
         private BinaryWriter _sw;
@@ -58,6 +58,7 @@ namespace UsbTest
         private Mat imGrayResult2 = new Mat();
 
         private delegate void ShowMsg();
+
         private delegate void UpdateBytesDelegate(byte[] data);
 
         private void Window_Loaded(object sender, EventArgs e)
@@ -92,6 +93,7 @@ namespace UsbTest
                     Console.Write(ex.ToString());
                 }
             }
+
             _myUsbDevice = null;
             UsbDevice.Exit();
         }
@@ -132,7 +134,7 @@ namespace UsbTest
                 System.Windows.MessageBox.Show("找不到设备");
             }
 
-            foreach(UsbRegistry regDevice in _regList)
+            foreach (UsbRegistry regDevice in _regList)
             {
                 LbxDev.Items.Add(regDevice.FullName);
             }
@@ -149,11 +151,13 @@ namespace UsbTest
 
         private void AddMsg(string msg)
         {
-            Dispatcher.BeginInvoke(DispatcherPriority.Normal, (ShowMsg)delegate () {
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, (ShowMsg) delegate()
+            {
                 if (LbxMsg.Items.Count > 50)
                 {
                     LbxMsg.Items.RemoveAt(0);
                 }
+
                 LbxMsg.Items.Add(msg);
             });
         }
@@ -213,9 +217,9 @@ namespace UsbTest
         private void ConnectbuttonClick(object sender, RoutedEventArgs e)
         {
 
-            if (Connectbutton.IsChecked != null && (bool)Connectbutton.IsChecked)
+            if (Connectbutton.IsChecked != null && (bool) Connectbutton.IsChecked)
             {
-                if(_myUsbDevice != null)
+                if (_myUsbDevice != null)
                 {
 
                 }
@@ -238,6 +242,8 @@ namespace UsbTest
                         }
 
                         _reader = _myUsbDevice.OpenEndpointReader(ReadEndpointID.Ep01);
+                        _writer = _myUsbDevice.OpenEndpointWriter(WriteEndpointID.Ep01);
+
                         _reader.DataReceived += OnRxEndPointData;
 
                         _reader.ReadBufferSize = 8640;
@@ -247,12 +253,13 @@ namespace UsbTest
 
                         ScanButton.IsEnabled = false;
                         SaveButton.IsEnabled = true;
-                        Filter.IsEnabled = false;
+                        Filter.IsEnabled = true;
                     }
                     else
                     {
                         AddMsg($" > 找不到设备");
                         Connectbutton.IsChecked = false;
+                        Filter.IsEnabled = false;
                     }
                 }
             }
@@ -264,7 +271,7 @@ namespace UsbTest
 
                 LbxDev.Items.RemoveAt(0);
                 AddMsg($" > 关闭设备");
-                AddMsg($" > 再次开启设备需要重新上电");
+                System.Windows.MessageBox.Show($"再次开启设备需要重新上电");
 
                 if (_myUsbDevice.IsOpen)
                 {
@@ -272,12 +279,14 @@ namespace UsbTest
                     {
                         IUsbDevice wholeUsbDevice = _myUsbDevice as IUsbDevice;
                         wholeUsbDevice?.ReleaseInterface(0);
+                        _myUsbDevice.Close();
                     }
-                    catch(Exception ex)
+                    catch (Exception ex)
                     {
                         Console.Write(ex.ToString());
                     }
                 }
+
                 _myUsbDevice = null;
                 UsbDevice.Exit();
 
@@ -289,13 +298,13 @@ namespace UsbTest
 
         private void Button_Click_1(object sender, RoutedEventArgs e)
         {
-            var btn = (System.Windows.Controls.Button)sender;
-            if(_filePath.Path == "")
+            var btn = (System.Windows.Controls.Button) sender;
+            if (_filePath.Path == "")
             {
                 var mDialog = new FolderBrowserDialog();
                 DialogResult result = mDialog.ShowDialog();
 
-                if(result == System.Windows.Forms.DialogResult.Cancel)
+                if (result == System.Windows.Forms.DialogResult.Cancel)
                 {
                     return;
                 }
@@ -303,7 +312,7 @@ namespace UsbTest
                 _filePath.Path = mDialog.SelectedPath.Trim();
             }
 
-            if(_dataState == DataState.Started)
+            if (_dataState == DataState.Started)
             {
                 _dataState = DataState.Stoped;
                 btn.Content = "开始保存";
@@ -318,6 +327,36 @@ namespace UsbTest
                 string path = _filePath.Path + "\\" + _filename;
                 _filestream = new FileStream(@path, FileMode.Create, FileAccess.Write);
                 _sw = new BinaryWriter(_filestream);
+            }
+        }
+
+        private void Filter_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            byte[] command1 = {0x0a, 0x0b, 0x0c, 0x0d};
+            byte[] command2 = {0x01, 0x02, 0x03, 0x04};
+            int bytesWritten = 4;
+            LibUsbDotNet.Main.ErrorCode ec = LibUsbDotNet.Main.ErrorCode.None;
+
+            try
+            {
+                if (Filter.SelectedIndex == 0)
+                {
+                    ec = _writer.Write(command1, 1000, out bytesWritten);
+                    if (ec != LibUsbDotNet.Main.ErrorCode.None)
+                        throw new Exception(UsbDevice.LastErrorString);
+                }
+
+                if (Filter.SelectedIndex == 1)
+                {
+                    ec = _writer.Write(command2, 1000, out bytesWritten);
+                    if (ec != LibUsbDotNet.Main.ErrorCode.None)
+                        throw new Exception(UsbDevice.LastErrorString);
+                }
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine();
+                Console.WriteLine((ec != LibUsbDotNet.Main.ErrorCode.None ? ec + ":" : string.Empty) + ex.Message);
             }
         }
     }

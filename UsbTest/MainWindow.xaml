@@ -6,7 +6,12 @@
         xmlns:local="clr-namespace:UsbTest"
         xmlns:system="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
-        Title="手势识别演示Demo" Height="450" Width="600" Loaded="Window_Loaded" Closing="Window_Closing" WindowStartupLocation="CenterScreen">
+        Title="手势识别演示Demo" 
+        Height="450" 
+        Width="600" 
+        Loaded="Window_Loaded" 
+        Closing="Window_Closing" 
+        WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <x:Array x:Key="Item" Type="{x:Type system:String}">
             <system:String>动目标检测</system:String>
@@ -34,7 +39,14 @@
                     <RowDefinition Height="*" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <ToggleButton IsChecked="False" x:Name="Connectbutton" Grid.Row="1"  FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="ConnectbuttonClick" Grid.ColumnSpan="2">
+                <ToggleButton IsChecked="False" 
+                              x:Name="Connectbutton" 
+                              Grid.Row="1"  
+                              FontWeight="Bold" 
+                              VerticalContentAlignment="Center" 
+                              Margin="10,10,10,10" 
+                              Click="ConnectbuttonClick" 
+                              Grid.ColumnSpan="2">
                     <ToggleButton.Style>
                         <Style TargetType="ToggleButton">
                             <Style.Triggers>
@@ -48,12 +60,38 @@
                         </Style>
                     </ToggleButton.Style>
                 </ToggleButton>
-                <Button x:Name="SaveButton" Content="保存文件"  Grid.Row="2" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="Button_Click_1" Grid.ColumnSpan="2"
-                        Grid.Column="0" IsEnabled="False" />
-                <Button x:Name="ScanButton" Content="扫描设备"  Grid.Row="0" FontWeight="Bold" VerticalContentAlignment="Center" Margin="10,10,10,10" Click="Button_Click" Grid.ColumnSpan="2"
+                <Button x:Name="SaveButton" 
+                        Content="保存文件"  
+                        Grid.Row="2" 
+                        FontWeight="Bold" 
+                        VerticalContentAlignment="Center" 
+                        Margin="10,10,10,10" 
+                        Click="Button_Click_1" 
+                        Grid.ColumnSpan="2"
+                        Grid.Column="0" 
+                        IsEnabled="False" />
+                <Button x:Name="ScanButton" 
+                        Content="扫描设备"  
+                        Grid.Row="0" 
+                        FontWeight="Bold" 
+                        VerticalContentAlignment="Center" 
+                        Margin="10,10,10,10" 
+                        Click="Button_Click" 
+                        Grid.ColumnSpan="2"
                         Grid.Column="0" />
 
-                <ComboBox x:Name="Filter"  Grid.Row="3" Grid.Column="0" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" Margin="10,10,10,10" ItemsSource="{Binding Source={StaticResource Item}}" FontWeight="Bold" SelectedIndex="0" Grid.ColumnSpan="2"/>
+                <ComboBox x:Name="Filter"  
+                          Grid.Row="3" 
+                          Grid.Column="0" 
+                          VerticalContentAlignment="Center" 
+                          HorizontalContentAlignment="Center" 
+                          Margin="10,10,10,10" 
+                          ItemsSource="{Binding Source={StaticResource Item}}" 
+                          FontWeight="Bold" 
+                          Grid.ColumnSpan="2"
+                          IsEnabled="False"
+                          SelectionChanged="Filter_SelectionChanged"
+                          />
             </Grid>
         </GroupBox>
         <GroupBox Grid.Row="0" Grid.Column="1" Header="状态显示">
