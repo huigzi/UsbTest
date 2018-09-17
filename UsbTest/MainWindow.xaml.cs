@@ -3,9 +3,14 @@ using LibUsbDotNet.Main;
 using OpenCvSharp;
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Forms;
+using System.Windows.Media;
 using System.Windows.Threading;
+using InteractiveDataDisplay.WPF;
+using MathNet.Numerics.LinearAlgebra;
+using UsbTest.algorithm;
 
 namespace UsbTest
 {
@@ -43,23 +48,38 @@ namespace UsbTest
         private UsbRegDeviceList _regList;
         private UsbEndpointReader _reader;
         private UsbEndpointWriter _writer;
-        private byte[] _recvBuf = new byte[8640];
+        private byte[] _recvBuf = new byte[13760];
         private float[] _iniImage = new float[2160];
+        private float[] _trackImage = new float[2160];
+        private byte[] adcBuf = new byte[5120];
+        private Int16[] timerPlotBuf = new Int16[320];
+        private double[] xTemp = new double[1000];
+        private double[] yTemp = new double[1000];
         private Mat _imGray = new Mat(54, 80, MatType.CV_32F);
         private string _filename;
         private FileStream _filestream;
         private BinaryWriter _sw;
         private readonly FilePath _filePath;
         private DataState _dataState = DataState.Stoped;
+        private readonly LineGraph _lineGraphs;
+        private int trackNum = 0;
 
         private Mat dst = new Mat();
         private Mat recover = new Mat();
         private Mat imGrayResult1 = new Mat();
         private Mat imGrayResult2 = new Mat();
 
+        private KalmanFiltering kalmanFiltering = new KalmanFiltering();
+
+        private Matrix<double> _matrixDataTemp;
+
         private delegate void ShowMsg();
 
         private delegate void UpdateBytesDelegate(byte[] data);
+
+        private delegate void UpdatePlot(Int16[] plotBuf);
+
+        private delegate void UpdateTrack(double[] plotBuf);
 
         private void Window_Loaded(object sender, EventArgs e)
         {
@@ -102,20 +122,108 @@ namespace UsbTest
         {
             InitializeComponent();
 
-            _myUsbFinder = new UsbDeviceFinder(1155, 22315);
+            var matrixBuider = Matrix<double>.Build;
+
+            //_myUsbFinder = new UsbDeviceFinder(1155, 22399);
+            _myUsbFinder = new UsbDeviceFinder(0x0484, 0x573d);
             _filePath = new FilePath();
+
+            _matrixDataTemp = matrixBuider.Dense(72, 27);
+
+            _lineGraphs = new LineGraph()
+            {
+                Stroke = new SolidColorBrush(Color.FromArgb(255, 0, 0, 0)),
+                Description = $"跟踪图样",
+                StrokeThickness = 2
+            };
+
+            Tlines.Children.Add(_lineGraphs);
         }
 
         private void OnRxEndPointData(object sender, EndpointDataEventArgs e)
         {
             AddMsg($" > {e.Count} data received");
-            Array.Copy(e.Buffer, _recvBuf, e.Buffer.Length);
+            Array.Copy(e.Buffer, 0, _recvBuf, 0, 8640);
+            Array.Copy(e.Buffer, 8640, adcBuf, 0, 5120);
+            int k = 0;
 
-            Dispatcher.Invoke(new ShowMsg(CreatImg));
+            for (int i = 0; i < 5120 - 16; i = i + 16)
+            {
+                timerPlotBuf[k] = BitConverter.ToInt16(adcBuf, i);
+                // timerPlotBuf[k] = BitConverter.ToInt16(e.Buffer, i);
+                k++;
+            }
+
+            Dispatcher.Invoke(new UpdatePlot(AddPlot), timerPlotBuf);
+            //Dispatcher.Invoke(new ShowMsg(CreatImg));
+
+            for (int i = 0; i < 8640; i = i + 4)
+            {
+                _trackImage[i / 4] = BitConverter.ToSingle(_recvBuf, i);
+            }
+
+            for (int i = 8; i < 80; i++)
+            {
+                for (int j = 0; j < 27; j++)
+                {
+                    _matrixDataTemp[i - 8, j] = _trackImage[j + i * 27];
+                }
+            }
+
+            var result = kalmanFiltering.TraceTableEstablishment(_matrixDataTemp);
+
+            if (result.Count > 0)
+            {
+                if (kalmanFiltering.StartFlag == 0)
+                {
+                    var temp = kalmanFiltering.TrackingIni(result);
+
+                    for (int i = 0; i < 6; i++)
+                    {
+                        kalmanFiltering.PredictPosition[i] = temp[i];
+                    }
+
+                    trackNum = 0;
+                }
+                else
+                {
+                    kalmanFiltering.Tracking(result);
+                    xTemp[trackNum] = kalmanFiltering.CurrentPosition[0] * 100;
+                    yTemp[trackNum] = kalmanFiltering.CurrentPosition[3] * 100;
+                    trackNum++;
+                }
+
+            }
+            else
+            {
+
+                if (kalmanFiltering.TrackCount > 0)
+                {
+                    kalmanFiltering.MissCount++;
+                }
+
+                if (kalmanFiltering.MissCount > 50)
+                {
+                    double[] plotTemp = new double[kalmanFiltering.TrackCount * 2];
+                    for (int i = 0; i < kalmanFiltering.TrackCount; i++)
+                    {
+                        plotTemp[i] = xTemp[i];
+                        plotTemp[i + kalmanFiltering.TrackCount] = yTemp[i];
+                    }
+
+                    //Dispatcher.Invoke(new UpdateTrack(AddTrack), plotTemp);
+                    trackNum = 0;
+                    kalmanFiltering.TrackCount = 0;
+
+                    kalmanFiltering.StartFlag = 0;
+                }
+                
+            }
+
 
             if (_dataState == DataState.Started)
             {
-                Dispatcher.Invoke(new UpdateBytesDelegate(SaveData), e.Buffer);
+                Dispatcher.Invoke(new UpdateBytesDelegate(SaveData), adcBuf);
             }
 
         }
@@ -139,6 +247,24 @@ namespace UsbTest
                 LbxDev.Items.Add(regDevice.FullName);
             }
 
+        }
+
+        private void AddPlot(Int16[] plotBuf)
+        {
+            _lineGraphs.PlotY(plotBuf);
+        }
+
+        private void AddTrack(double[] plotBuf)
+        {
+            var xTemp = new double[plotBuf.Length / 2];
+            var yTemp = new double[plotBuf.Length / 2];
+
+            for (int i = 0; i < plotBuf.Length / 2; i++)
+            {
+                xTemp[i] = plotBuf[i];
+                yTemp[i] = plotBuf[i + plotBuf.Length / 2];
+                _lineGraphs.Plot(xTemp, yTemp);
+            }
         }
 
         private void SaveData(byte[] bytes)
@@ -165,9 +291,8 @@ namespace UsbTest
         private void CreatImg()
         {
 
-            if (Filter.SelectedIndex == 0)
+            if (Filter.SelectedIndex == 0 || Filter.SelectedIndex == -1)
             {
-
                 for (int i = 0; i < 8640; i = i + 4)
                 {
                     _iniImage[i / 4] = BitConverter.ToSingle(_recvBuf, i);
@@ -246,7 +371,7 @@ namespace UsbTest
 
                         _reader.DataReceived += OnRxEndPointData;
 
-                        _reader.ReadBufferSize = 8640;
+                        _reader.ReadBufferSize = 13760;
 
                         _reader.Reset();
                         _reader.DataReceivedEnabled = true;
@@ -334,7 +459,7 @@ namespace UsbTest
         {
             byte[] command1 = {0x0a, 0x0b, 0x0c, 0x0d};
             byte[] command2 = {0x01, 0x02, 0x03, 0x04};
-            int bytesWritten = 4;
+            int bytesWritten;
             LibUsbDotNet.Main.ErrorCode ec = LibUsbDotNet.Main.ErrorCode.None;
 
             try
